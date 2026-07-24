@@ -169,7 +169,7 @@ def simple_deobfuscate(code):
     return code[:1900]
 
 # ============================================================
-# DISCORD COMMANDS WITH ERROR HANDLING
+# DISCORD COMMANDS
 # ============================================================
 @bot.command()
 async def get(ctx, link: str = None):
@@ -231,46 +231,20 @@ async def l(ctx, *, code_input: str = None):
     
     await ctx.send(final[:2000])
 
-@bot.command()
-async def help(ctx):
-    """Show available commands"""
-    embed = discord.Embed(
-        title="🐟 CAT Bot Commands",
-        description="Source extraction & deobfuscation bot",
-        color=0x00ff88
-    )
-    embed.add_field(
-        name=".get <url>",
-        value="Fetch code from GitHub, Pastebin, Pastefy, Paste.rs, Hastebin, Codeshare\nDetects Junkie/Polsec injections",
-        inline=False
-    )
-    embed.add_field(
-        name=".l <code or url>",
-        value="Deobfuscate JavaScript code or fetch & deobf from URL",
-        inline=False
-    )
-    embed.add_field(
-        name=".help",
-        value="Show this menu",
-        inline=False
-    )
-    embed.set_footer(text="Bot is live! 🚀")
-    await ctx.send(embed=embed)
-
 @bot.event
 async def on_ready():
     logger.info(f"✅ Bot online: {bot.user}")
     print(f"✅ Bot online: {bot.user}")
-    print(f"📝 Commands: .get <url> | .l <code or url> | .help")
+    print(f"📝 Commands: .get <url> | .l <code or url>")
 
 # ============================================================
-# FLASK WEB SERVER (Keeps Render Alive)
+# FLASK WEB SERVER
 # ============================================================
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🐟 CAT Bot is running! Commands: .get, .l, .help"
+    return "🐟 CAT Bot is running! Commands: .get, .l"
 
 @app.route('/health')
 def health():
