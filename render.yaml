@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: cat-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: DISCORD_BOT_TOKEN
+        sync: false  # You'll set this in Render dashboard
+      - key: BOT_PREFIX
+        value: "."
+      - key: MAX_WORKERS
+        value: "8"
+      - key: FETCH_TIMEOUT
+        value: "15"
