@@ -169,11 +169,15 @@ def simple_deobfuscate(code):
     return code[:1900]
 
 # ============================================================
-# DISCORD COMMANDS
+# DISCORD COMMANDS WITH ERROR HANDLING
 # ============================================================
 @bot.command()
-async def get(ctx, link: str):
+async def get(ctx, link: str = None):
     """Fetch code from URL and detect junkie/polsec"""
+    if not link:
+        await ctx.send("❌ Usage: `.get <url>`\nExample: `.get https://pastebin.com/raw/abc123`")
+        return
+    
     if not link.startswith(('http://', 'https://')):
         link = 'https://' + link
     
@@ -200,8 +204,12 @@ async def get(ctx, link: str):
         await ctx.send(chunk)
 
 @bot.command()
-async def l(ctx, *, code_input: str):
+async def l(ctx, *, code_input: str = None):
     """Deobfuscate JavaScript code or URL"""
+    if not code_input:
+        await ctx.send("❌ Usage: `.l <code or url>`\nExample: `.l https://pastebin.com/raw/abc123`\nOr: `.l eval('alert(1)')`")
+        return
+    
     if code_input.startswith(('http', 'www')):
         if not code_input.startswith('http'):
             code_input = 'https://' + code_input
@@ -223,11 +231,37 @@ async def l(ctx, *, code_input: str):
     
     await ctx.send(final[:2000])
 
+@bot.command()
+async def help(ctx):
+    """Show available commands"""
+    embed = discord.Embed(
+        title="🐟 CAT Bot Commands",
+        description="Source extraction & deobfuscation bot",
+        color=0x00ff88
+    )
+    embed.add_field(
+        name=".get <url>",
+        value="Fetch code from GitHub, Pastebin, Pastefy, Paste.rs, Hastebin, Codeshare\nDetects Junkie/Polsec injections",
+        inline=False
+    )
+    embed.add_field(
+        name=".l <code or url>",
+        value="Deobfuscate JavaScript code or fetch & deobf from URL",
+        inline=False
+    )
+    embed.add_field(
+        name=".help",
+        value="Show this menu",
+        inline=False
+    )
+    embed.set_footer(text="Bot is live! 🚀")
+    await ctx.send(embed=embed)
+
 @bot.event
 async def on_ready():
     logger.info(f"✅ Bot online: {bot.user}")
     print(f"✅ Bot online: {bot.user}")
-    print(f"📝 Commands: .get <url> | .l <code or url>")
+    print(f"📝 Commands: .get <url> | .l <code or url> | .help")
 
 # ============================================================
 # FLASK WEB SERVER (Keeps Render Alive)
@@ -236,7 +270,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🐟 CAT Bot is running! Commands: .get, .l"
+    return "🐟 CAT Bot is running! Commands: .get, .l, .help"
 
 @app.route('/health')
 def health():
