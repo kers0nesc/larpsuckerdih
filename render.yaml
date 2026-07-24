@@ -6,7 +6,7 @@ services:
     startCommand: python bot.py
     envVars:
       - key: DISCORD_BOT_TOKEN
-        sync: false  # You'll set this in Render dashboard
+        sync: false   # This tells Render to ask for it in dashboard
       - key: BOT_PREFIX
         value: "."
       - key: MAX_WORKERS
