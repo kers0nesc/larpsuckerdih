@@ -1,6 +1,4 @@
 discord.py
 requests
-js2py
-esprima
 beautifulsoup4
 Flask
