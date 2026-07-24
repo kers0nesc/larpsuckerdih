@@ -25,11 +25,13 @@ print(f"✅ Token loaded: {TOKEN[:10]}...")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-bot = commands.Bot(command_prefix='.', intents=discord.Intents.default())
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='.', intents=intents)
 executor = ThreadPoolExecutor(max_workers=5)
 
 # ============================================================
-# PLATFORM HANDLERS
+# FETCH ENGINE
 # ============================================================
 def fetch_with_timeout(url, timeout=15):
     try:
@@ -108,8 +110,15 @@ def fetch_from_any_platform(url):
             return response
     return fetch_with_timeout(url)
 
+def detect_platform(url):
+    platforms = ['github', 'pastebin', 'pastefy', 'paste.rs', 'hastebin', 'codeshare.io']
+    for p in platforms:
+        if p in url.lower():
+            return p
+    return "unknown"
+
 # ============================================================
-# JUNKIE & POLSEC DETECTORS (Simplified)
+# JUNKIE & POLSEC DETECTORS
 # ============================================================
 JUNKIE_PATTERNS = [
     r'junkie\(.*?\)',
@@ -153,27 +162,18 @@ def extract_polsec_script(script):
 
 def simple_deobfuscate(code):
     """Simple deobfuscation without js2py"""
-    # Remove hex escapes
     code = re.sub(r'\\x([0-9a-fA-F]{2})', lambda m: chr(int(m.group(1), 16)), code)
     code = re.sub(r'\\u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1), 16)), code)
-    # Replace eval with console.log
     code = re.sub(r'eval\(([^)]+)\)', r'console.log(\1)', code)
-    # Handle base64
     code = re.sub(r'atob\(([^)]+)\)', lambda m: f'Buffer.from({m.group(1)}, "base64").toString()', code)
     return code[:1900]
-
-def detect_platform(url):
-    platforms = ['github', 'pastebin', 'pastefy', 'paste.rs', 'hastebin', 'codeshare.io']
-    for p in platforms:
-        if p in url.lower():
-            return p
-    return "unknown"
 
 # ============================================================
 # DISCORD COMMANDS
 # ============================================================
 @bot.command()
 async def get(ctx, link: str):
+    """Fetch code from URL and detect junkie/polsec"""
     if not link.startswith(('http://', 'https://')):
         link = 'https://' + link
     
@@ -200,7 +200,8 @@ async def get(ctx, link: str):
         await ctx.send(chunk)
 
 @bot.command()
-async def deobf(ctx, *, code_input: str):
+async def l(ctx, *, code_input: str):
+    """Deobfuscate JavaScript code or URL"""
     if code_input.startswith(('http', 'www')):
         if not code_input.startswith('http'):
             code_input = 'https://' + code_input
@@ -222,18 +223,11 @@ async def deobf(ctx, *, code_input: str):
     
     await ctx.send(final[:2000])
 
-@bot.command()
-async def help(ctx):
-    embed = discord.Embed(title="🐟 CAT Bot - Source Extractor", color=0x00ff88)
-    embed.add_field(name=".get <url>", value="Fetch code from GitHub, Pastebin, etc.", inline=False)
-    embed.add_field(name=".deobf <code or url>", value="Simple deobfuscation", inline=False)
-    embed.add_field(name=".help", value="This menu", inline=False)
-    await ctx.send(embed=embed)
-
 @bot.event
 async def on_ready():
     logger.info(f"✅ Bot online: {bot.user}")
     print(f"✅ Bot online: {bot.user}")
+    print(f"📝 Commands: .get <url> | .l <code or url>")
 
 # ============================================================
 # FLASK WEB SERVER (Keeps Render Alive)
@@ -242,7 +236,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🐟 CAT Bot is running! Commands: .get, .deobf, .help"
+    return "🐟 CAT Bot is running! Commands: .get, .l"
 
 @app.route('/health')
 def health():
@@ -255,7 +249,10 @@ if __name__ == "__main__":
     import threading
     
     def run_bot():
-        bot.run(TOKEN)
+        try:
+            bot.run(TOKEN)
+        except Exception as e:
+            print(f"❌ Bot error: {e}")
     
     threading.Thread(target=run_bot, daemon=True).start()
     print("🌐 Starting web server...")
