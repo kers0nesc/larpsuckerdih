@@ -6,6 +6,7 @@ All config via environment variables
 """
 
 import os
+import sys
 import re
 import logging
 import requests
@@ -19,9 +20,31 @@ from urllib.parse import urljoin
 # -------------------------------------------------------------------
 #  ENVIRONMENT CONFIG (Render sets these)
 # -------------------------------------------------------------------
-BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
+
+# DEBUG: Print all environment variables (REMOVE AFTER DEBUGGING)
+print("=== ENVIRONMENT VARIABLES (first 10) ===")
+for i, (key, value) in enumerate(os.environ.items()):
+    if i > 10:
+        break
+    print(f"{key}: {value[:20] if value else 'None'}...")
+
+# Try multiple ways to get the token
+BOT_TOKEN = (
+    os.environ.get("DISCORD_BOT_TOKEN") or
+    os.environ.get("DISCORD_TOKEN") or
+    os.environ.get("TOKEN") or
+    os.environ.get("BOT_TOKEN")
+)
+
 if not BOT_TOKEN:
-    raise ValueError("DISCORD_BOT_TOKEN environment variable not set!")
+    print("❌ ERROR: No token found in any environment variable!")
+    print("   Tried: DISCORD_BOT_TOKEN, DISCORD_TOKEN, TOKEN, BOT_TOKEN")
+    print("   Please set DISCORD_BOT_TOKEN in Render Environment Variables")
+    print("   Exiting...")
+    sys.exit(1)
+
+print(f"✅ Token found! Length: {len(BOT_TOKEN)} characters")
+print(f"   First 10 chars: {BOT_TOKEN[:10]}...")
 
 COMMAND_PREFIX = os.environ.get("BOT_PREFIX", ".")
 MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 8))
@@ -162,6 +185,7 @@ bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
 @bot.event
 async def on_ready():
     logger.info(f"✅ Bot logged in as {bot.user}")
+    print(f"✅ Bot logged in as {bot.user}")
 
 @bot.command()
 async def get(ctx, link: str):
@@ -280,9 +304,24 @@ def api_l():
 #  RUN BOTH
 # -------------------------------------------------------------------
 def run_bot():
-    bot.run(BOT_TOKEN)
+    try:
+        print("🚀 Starting bot...")
+        bot.run(BOT_TOKEN)
+    except discord.LoginFailure as e:
+        print(f"❌ Login failed: {e}")
+        print("   Check that your token is valid and has the correct permissions")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Bot error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     import threading
-    threading.Thread(target=run_bot, daemon=True).start()
+    
+    # Start bot in background thread
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    # Start Flask web server
+    print(f"🌐 Starting web server on {WEB_HOST}:{WEB_PORT}")
     app.run(host=WEB_HOST, port=WEB_PORT, debug=False)
