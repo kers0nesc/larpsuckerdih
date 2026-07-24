@@ -1,77 +1,111 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-CAT v4.1 - Render Deployment Ready
-All config via environment variables
+CAT v4.1 - ULTRA DEBUG
 """
 
 import os
 import sys
-import re
+import traceback
 import logging
-import requests
-from flask import Flask, request, jsonify, render_template_string
-from discord.ext import commands
-import discord
-from concurrent.futures import ThreadPoolExecutor
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
 
-# -------------------------------------------------------------------
-#  ENVIRONMENT CONFIG (Render sets these)
-# -------------------------------------------------------------------
+# ============================================================
+# STEP 1: SHOW ALL ENVIRONMENT VARIABLES
+# ============================================================
+print("=" * 60)
+print("ENVIRONMENT VARIABLES CHECK:")
+print("=" * 60)
 
-# DEBUG: Print all environment variables (REMOVE AFTER DEBUGGING)
-print("=== ENVIRONMENT VARIABLES (first 10) ===")
-for i, (key, value) in enumerate(os.environ.items()):
-    if i > 10:
+# Show ALL env vars (masked for security)
+for key in sorted(os.environ.keys()):
+    value = os.environ[key]
+    if "TOKEN" in key.upper() or "KEY" in key.upper() or "SECRET" in key.upper():
+        print(f"  {key}: {value[:10]}... (length: {len(value)})")
+    else:
+        print(f"  {key}: {value[:30]}{'...' if len(value) > 30 else ''}")
+
+print("=" * 60)
+
+# ============================================================
+# STEP 2: TRY MULTIPLE TOKEN SOURCES
+# ============================================================
+BOT_TOKEN = None
+
+# Try every possible token variable name
+token_vars = [
+    "DISCORD_BOT_TOKEN",
+    "DISCORD_TOKEN", 
+    "TOKEN",
+    "BOT_TOKEN",
+    "DISCORD_BOT_SECRET",
+    "DISCORD_SECRET"
+]
+
+for var in token_vars:
+    val = os.environ.get(var)
+    if val:
+        print(f"✅ Found token in {var}: {val[:10]}... (length: {len(val)})")
+        BOT_TOKEN = val
         break
-    print(f"{key}: {value[:20] if value else 'None'}...")
-
-# Try multiple ways to get the token
-BOT_TOKEN = (
-    os.environ.get("DISCORD_BOT_TOKEN") or
-    os.environ.get("DISCORD_TOKEN") or
-    os.environ.get("TOKEN") or
-    os.environ.get("BOT_TOKEN")
-)
 
 if not BOT_TOKEN:
-    print("❌ ERROR: No token found in any environment variable!")
-    print("   Tried: DISCORD_BOT_TOKEN, DISCORD_TOKEN, TOKEN, BOT_TOKEN")
+    print("❌ NO TOKEN FOUND in any environment variable!")
+    print("   Tried:", ", ".join(token_vars))
+    print("")
     print("   Please set DISCORD_BOT_TOKEN in Render Environment Variables")
-    print("   Exiting...")
+    print("   Then click 'Manual Deploy' -> 'Deploy latest commit'")
     sys.exit(1)
 
-print(f"✅ Token found! Length: {len(BOT_TOKEN)} characters")
-print(f"   First 10 chars: {BOT_TOKEN[:10]}...")
+print("=" * 60)
 
+# ============================================================
+# STEP 3: CONTINUE WITH IMPORTS
+# ============================================================
+try:
+    import re
+    import requests
+    from flask import Flask, request, jsonify, render_template_string
+    from discord.ext import commands
+    import discord
+    from concurrent.futures import ThreadPoolExecutor
+    from bs4 import BeautifulSoup
+    from urllib.parse import urljoin
+    print("✅ All imports successful")
+except Exception as e:
+    print(f"❌ Import error: {e}")
+    traceback.print_exc()
+    sys.exit(1)
+
+# ============================================================
+# STEP 4: CONFIGURATION
+# ============================================================
 COMMAND_PREFIX = os.environ.get("BOT_PREFIX", ".")
 MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 8))
 FETCH_TIMEOUT = int(os.environ.get("FETCH_TIMEOUT", 15))
 MAX_CHUNK_SIZE = 1900
 WEB_HOST = os.environ.get("WEB_HOST", "0.0.0.0")
-WEB_PORT = int(os.environ.get("PORT", 5000))  # Render uses PORT
+WEB_PORT = int(os.environ.get("PORT", 5000))
 
-# -------------------------------------------------------------------
-#  LOGGING
-# -------------------------------------------------------------------
+# ============================================================
+# STEP 5: LOGGING
+# ============================================================
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("CAT_BOT")
+logger.info("=== CAT BOT STARTING ===")
 
-# -------------------------------------------------------------------
-#  FLASK APP
-# -------------------------------------------------------------------
+# ============================================================
+# STEP 6: FLASK APP
+# ============================================================
 app = Flask(__name__)
 executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
-# -------------------------------------------------------------------
-#  FETCH ENGINE
-# -------------------------------------------------------------------
-def fetch_text_sync(url: str) -> str | None:
+# ============================================================
+# STEP 7: FETCH ENGINE
+# ============================================================
+def fetch_text_sync(url: str):
     try:
         resp = requests.get(url, headers={"User-Agent": "CAT-Bot/4.1"}, timeout=FETCH_TIMEOUT)
         if resp.status_code == 200:
@@ -80,9 +114,9 @@ def fetch_text_sync(url: str) -> str | None:
         logger.error(f"Fetch error {url}: {e}")
     return None
 
-# -------------------------------------------------------------------
-#  URL NORMALIZERS
-# -------------------------------------------------------------------
+# ============================================================
+# STEP 8: URL NORMALIZERS
+# ============================================================
 def normalize_url(url: str) -> str:
     if "raw.githubusercontent.com" in url:
         return url
@@ -107,9 +141,9 @@ def normalize_url(url: str) -> str:
         return f"https://codeshare.io/raw/{pid}"
     return url
 
-# -------------------------------------------------------------------
-#  JUNKIE / POLSEC DETECTORS
-# -------------------------------------------------------------------
+# ============================================================
+# STEP 9: JUNKIE / POLSEC DETECTORS
+# ============================================================
 JUNKIE_PATTERNS = [
     r'junkie\(.*?\)',
     r'__junkie_loader__',
@@ -175,17 +209,28 @@ def search_source_repo(code: str) -> str:
             return f"Possible: {label}"
     return "Unknown source"
 
-# -------------------------------------------------------------------
-#  DISCORD BOT
-# -------------------------------------------------------------------
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
+# ============================================================
+# STEP 10: DISCORD BOT
+# ============================================================
+try:
+    intents = discord.Intents.default()
+    intents.message_content = True
+    bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
+    print("✅ Discord bot instance created")
+except Exception as e:
+    print(f"❌ Failed to create bot: {e}")
+    traceback.print_exc()
+    sys.exit(1)
 
 @bot.event
 async def on_ready():
     logger.info(f"✅ Bot logged in as {bot.user}")
     print(f"✅ Bot logged in as {bot.user}")
+
+@bot.event
+async def on_error(event, *args, **kwargs):
+    logger.error(f"Error in {event}: {traceback.format_exc()}")
+    print(f"❌ Error in {event}")
 
 @bot.command()
 async def get(ctx, link: str):
@@ -226,9 +271,9 @@ async def help(ctx):
     embed.add_field(name=".help", value="This menu", inline=False)
     await ctx.send(embed=embed)
 
-# -------------------------------------------------------------------
-#  FLASK ROUTES
-# -------------------------------------------------------------------
+# ============================================================
+# STEP 11: FLASK ROUTES
+# ============================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -300,28 +345,36 @@ def api_l():
             code = content
     return jsonify({"deobfuscated": static_deobfuscate(code)[:MAX_CHUNK_SIZE]})
 
-# -------------------------------------------------------------------
-#  RUN BOTH
-# -------------------------------------------------------------------
+# ============================================================
+# STEP 12: RUN BOTH
+# ============================================================
 def run_bot():
     try:
-        print("🚀 Starting bot...")
+        print("🚀 Starting bot with token:", BOT_TOKEN[:10] + "...")
         bot.run(BOT_TOKEN)
-    except discord.LoginFailure as e:
-        print(f"❌ Login failed: {e}")
-        print("   Check that your token is valid and has the correct permissions")
-        sys.exit(1)
     except Exception as e:
-        print(f"❌ Bot error: {e}")
+        print(f"❌ Bot crashed: {e}")
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":
-    import threading
-    
-    # Start bot in background thread
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    
-    # Start Flask web server
-    print(f"🌐 Starting web server on {WEB_HOST}:{WEB_PORT}")
-    app.run(host=WEB_HOST, port=WEB_PORT, debug=False)
+    try:
+        import threading
+        
+        print("=" * 60)
+        print("🐟 CAT BOT v4.1 - Starting...")
+        print("=" * 60)
+        
+        # Start bot in background thread
+        bot_thread = threading.Thread(target=run_bot, daemon=True)
+        bot_thread.start()
+        print("✅ Bot thread started")
+        
+        # Start Flask web server
+        print(f"🌐 Starting web server on {WEB_HOST}:{WEB_PORT}")
+        app.run(host=WEB_HOST, port=WEB_PORT, debug=False)
+        
+    except Exception as e:
+        print(f"❌ FATAL ERROR: {e}")
+        traceback.print_exc()
+        sys.exit(1)
